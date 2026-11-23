@@ -6,19 +6,35 @@
 
 ## ✨ Overview
 
-Walter UserAPI provides a browser-based **user management dashboard** and REST endpoints for users, roles, permissions, profiles, and pictures. It uses a local JSON file rather than a database server. The interface has a dark background, purple-to-pink accents, user counters, editable records, and an add/edit dialog.
+Walter UserAPI provides a browser-based **user management dashboard** and REST endpoints for users, roles, permissions, profiles, and pictures. It uses local JSON files rather than a database server. The interface has a dark background, purple-to-pink accents, user counters, editable records, profile/picture editing, and add/edit dialogs.
 
-### 🖼️ UI previews
+## 📸 Interface gallery
 
-> **Important:** These are illustrative previews based on the dashboard design, with fictional example users. They are **not screenshots of a running .NET application**.
+> **Illustrated previews, not runtime screenshots.** These images are based on the current dark-mode MVC interface and use fictional example records. A real .NET build and live browser capture have not been performed.
 
-**Dashboard**
+### 👥 Users dashboard
+Manage users, assign roles, and open the profile/picture editor.
 
-![Illustrative dark-mode user dashboard](docs/images/dashboard-preview.svg)
+![Users management preview](docs/images/users-preview.svg)
 
-**Add user dialog**
+### 👤 User profile & 🖼️ picture gallery
+Edit display name, biography, location and website; upload pictures and choose an avatar.
 
-![Illustrative add-user dialog](docs/images/add-user-preview.svg)
+![Profile editor and image gallery preview](docs/images/profile-preview.svg)
+
+### 🛡️ Roles management
+Create roles, edit descriptions, and assign existing permissions.
+
+![Roles CRUD preview](docs/images/roles-preview.svg)
+
+### 🔑 Permissions management
+Create and manage dotted permission keys such as `users.read` and `roles.manage`.
+
+![Permissions CRUD preview](docs/images/permissions-preview.svg)
+
+### ➕ Add user dialog
+
+![Add user dialog preview](docs/images/add-user-preview.svg)
 
 ## 🚀 Quick start
 
@@ -38,7 +54,11 @@ Open **http://localhost:5080** for the UI, or **http://localhost:5080/api/users*
 | | Feature | Details |
 |---|---|---|
 | 👥 | User CRUD | Create, list, view, edit, and delete users |
-| 👤 | User profile CRUD | Manage biography, location, website and display name |\n| 🖼️ | Profile picture CRUD | Upload, view, delete and select avatars |\n| 🛡️ | Roles CRUD | Manage roles and assign permissions |\n| 🔑 | Permissions CRUD | Manage named permissions and descriptions |\n| 🌙 | Dark-mode UI | Responsive dashboard with purple/pink highlights |
+| 👤 | User profile CRUD | Manage biography, location, website and display name |
+| 🖼️ | Profile picture CRUD | Upload, view, delete and select avatars |
+| 🛡️ | Roles CRUD | Manage roles and assign permissions |
+| 🔑 | Permissions CRUD | Manage named permissions and descriptions |
+| 🌙 | Dark-mode UI | Responsive dashboard with purple/pink highlights |
 | 🔓 | Anonymous endpoints | No account or token required |
 | 💾 | JSON persistence | Saves to `Data/users.json` |
 | 🧵 | Async storage | Serializes file access within one app process |
@@ -182,35 +202,56 @@ curl -X POST http://localhost:5080/api/users/USER_GUID/pictures \
 
 ```text
 walter-userapi/
-├── Controllers/\n│   ├── ProfilesController.cs    # User profiles\n│   ├── ProfilePicturesController.cs # Image endpoints\n│   ├── RolesController.cs       # Roles CRUD\n│   ├── PermissionsController.cs # Permissions CRUD
+├── Controllers/
+│   ├── ProfilesController.cs    # User profiles
+│   ├── ProfilePicturesController.cs # Image endpoints
+│   ├── RolesController.cs       # Roles CRUD
+│   ├── PermissionsController.cs # Permissions CRUD
 │   ├── HomeController.cs       # MVC dashboard
 │   └── UsersController.cs      # Anonymous REST endpoints
-├── Models/\n│   ├── ProfileModels.cs         # Profile and picture metadata\n│   ├── AccessModels.cs         # Roles and permissions
+├── Models/
+│   ├── ProfileModels.cs         # Profile and picture metadata
+│   ├── AccessModels.cs         # Roles and permissions
 │   └── User.cs                 # User and validated input
-├── Services/\n│   ├── IProfileStore.cs         # Profile storage contract\n│   ├── JsonProfileStore.cs      # Profile and image storage\n│   ├── IAccessStore.cs         # Access metadata contract\n│   ├── JsonAccessStore.cs      # Roles/permissions JSON storage
+├── Services/
+│   ├── IProfileStore.cs         # Profile storage contract
+│   ├── JsonProfileStore.cs      # Profile and image storage
+│   ├── IAccessStore.cs         # Access metadata contract
+│   ├── JsonAccessStore.cs      # Roles/permissions JSON storage
 │   ├── IUserStore.cs           # Persistence contract
 │   └── JsonUserStore.cs        # JSON file storage
 ├── Views/Home/
 │   └── Index.cshtml            # Dashboard and CRUD interactions
 ├── wwwroot/css/
 │   └── site.css                # Dark-mode styles
-├── Data/users.json             # Persisted user records\n├── Data/profiles.json          # Profile data (created on first write)\n├── Data/profile-pictures.json  # Picture metadata (created on upload)\n├── Data/profile-images/        # Uploaded images (created at runtime)\n├── Data/roles.json             # Role definitions\n├── Data/permissions.json       # Permission definitions
-├── docs/images/                # Illustrated UI previews
+├── Data/users.json             # Persisted user records
+├── Data/profiles.json          # Profile data (created on first write)
+├── Data/profile-pictures.json  # Picture metadata (created on upload)
+├── Data/profile-images/        # Uploaded images (created at runtime)
+├── Data/roles.json             # Role definitions
+├── Data/permissions.json       # Permission definitions
+├── docs/images/                # Five illustrated UI previews
 ├── Properties/launchSettings.json
 ├── Program.cs
 └── AnonymousUserMvcApi.csproj
 ```
 
-## 🏗️ How it works
+## 🧭 Architecture
 
 ```mermaid
 flowchart LR
-    A["🌙 MVC Dashboard"] --> B["🔌 UsersController"]
-    C["🌐 REST Client"] --> B
-    B --> D["🧩 IUserStore"]
-    D --> E["💾 JsonUserStore"]
-    E --> F[("📄 Data/users.json")]
+  UI["🌙 MVC Dashboard"] --> API["🔌 REST Controllers"]
+  Client["🌐 API Client"] --> API
+  API --> U["👥 JsonUserStore"]
+  API --> A["🛡️ JsonAccessStore"]
+  API --> P["👤 JsonProfileStore"]
+  U --> J[("💾 users.json")]
+  A --> R[("💾 roles.json + permissions.json")]
+  P --> M[("💾 profiles.json + profile-pictures.json")]
+  P --> I[("🖼️ profile-images/")]
 ```
+
+## 🏗️ How it works
 
 The MVC dashboard calls the same REST endpoints as external clients. `JsonUserStore` uses a semaphore to serialize reads and writes **within one process** and replaces the JSON file via a temporary file.
 
@@ -222,7 +263,7 @@ For internet-facing use, add authentication, authorization, rate limiting, HTTPS
 
 ## 🔧 Development status
 
-The code has been added to the repository, but a .NET build, automated tests, and live browser screenshots **have not been verified** in this environment. The images above are design previews, not evidence of a successful runtime test.
+The code has been added to the repository, but a .NET build, automated tests, and live browser screenshots **have not been verified** in this environment. The images above are illustrative UI mockups, not evidence of a successful runtime test.
 
 ---
 Made with 💜 using C#, ASP.NET Core MVC, and JSON.
