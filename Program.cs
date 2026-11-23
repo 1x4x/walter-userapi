@@ -3,6 +3,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 builder.Services.AddSingleton<IUserStore, JsonUserStore>();
 builder.Services.AddSingleton<IAccessStore, JsonAccessStore>();
+builder.Services.AddSingleton<IProfileStore, JsonProfileStore>();
 var app = builder.Build();
 app.UseStaticFiles();
 app.UseRouting();

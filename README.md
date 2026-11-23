@@ -6,7 +6,7 @@
 
 ## ✨ Overview
 
-Walter UserAPI provides a browser-based **user management dashboard** and fifteen JSON REST endpoints. It uses a local JSON file rather than a database server. The interface has a dark background, purple-to-pink accents, user counters, editable records, and an add/edit dialog.
+Walter UserAPI provides a browser-based **user management dashboard** and REST endpoints for users, roles, permissions, profiles, and pictures. It uses a local JSON file rather than a database server. The interface has a dark background, purple-to-pink accents, user counters, editable records, and an add/edit dialog.
 
 ### 🖼️ UI previews
 
@@ -38,7 +38,7 @@ Open **http://localhost:5080** for the UI, or **http://localhost:5080/api/users*
 | | Feature | Details |
 |---|---|---|
 | 👥 | User CRUD | Create, list, view, edit, and delete users |
-| 🛡️ | Roles CRUD | Manage roles and assign permissions |\n| 🔑 | Permissions CRUD | Manage named permissions and descriptions |\n| 🌙 | Dark-mode UI | Responsive dashboard with purple/pink highlights |
+| 👤 | User profile CRUD | Manage biography, location, website and display name |\n| 🖼️ | Profile picture CRUD | Upload, view, delete and select avatars |\n| 🛡️ | Roles CRUD | Manage roles and assign permissions |\n| 🔑 | Permissions CRUD | Manage named permissions and descriptions |\n| 🌙 | Dark-mode UI | Responsive dashboard with purple/pink highlights |
 | 🔓 | Anonymous endpoints | No account or token required |
 | 💾 | JSON persistence | Saves to `Data/users.json` |
 | 🧵 | Async storage | Serializes file access within one app process |
@@ -137,23 +137,64 @@ curl -X POST http://localhost:5080/api/permissions \
 
 **Important:** These permissions are **metadata, not enforced access control**. The API still uses anonymous access. Assigning an `Admin` role does not grant or restrict anything; no role checks or permission-based authorization middleware is implemented. Do not expose this service to untrusted clients.
 
+## 👤 User profiles & 🖼️ profile pictures
+
+The **Users** table has a **Profile & pictures** action. Each user can have one editable profile and multiple uploaded pictures. The profile editor supports display name, bio, location, website, image upload, image deletion, and choosing the primary avatar.
+
+### Profile endpoints
+
+| Method | Endpoint | Action |
+|---|---|---|
+| GET | `/api/profiles` | List existing profiles |
+| GET | `/api/users/{userId}/profile` | Get profile |
+| PUT | `/api/users/{userId}/profile` | Create or update profile |
+| DELETE | `/api/users/{userId}/profile` | Delete profile (pictures retained) |
+
+```bash
+curl -X PUT http://localhost:5080/api/users/USER_GUID/profile \
+ -H "Content-Type: application/json" \
+ -d '{"displayName":"Alex","bio":"Software developer","location":"Stockholm","website":"https://example.com"}'
+```
+
+### Picture endpoints
+
+| Method | Endpoint | Action |
+|---|---|---|
+| GET | `/api/users/{userId}/pictures` | List pictures |
+| GET | `/api/users/{userId}/pictures/{pictureId}` | Picture metadata |
+| GET | `/api/users/{userId}/pictures/{pictureId}/file` | View image bytes |
+| POST | `/api/users/{userId}/pictures` | Upload `multipart/form-data` with field `file` |
+| PUT | `/api/users/{userId}/pictures/{pictureId}/avatar` | Choose primary avatar |
+| DELETE | `/api/users/{userId}/pictures/{pictureId}` | Delete image and metadata |
+
+```bash
+curl -X POST http://localhost:5080/api/users/USER_GUID/pictures \
+ -F "file=@avatar.png"
+```
+
+**Image rules:** maximum 5 MiB; PNG, JPEG, GIF, and WebP signatures are checked server-side. Uploaded images receive generated filenames and are stored outside `wwwroot` in `Data/profile-images/`. Metadata is stored in `Data/profile-pictures.json`, and profiles in `Data/profiles.json`. Pictures are served through controller endpoints with a no-sniff response header. Uploads are not resized or scanned for malicious payloads.
+
+**Lifecycle note:** Deleting a profile retains its pictures; deleting a user does not automatically remove its profile and pictures in this version. Clean up those resources separately. Profile/picture metadata and files are not updated transactionally across files.
+
+**Security:** All profile and image endpoints remain anonymous. Anyone who can access the app can read or change profiles and images. Use only in a trusted development environment.
+
 ## 🗂️ Project structure
 
 ```text
 walter-userapi/
-├── Controllers/\n│   ├── RolesController.cs       # Roles CRUD\n│   ├── PermissionsController.cs # Permissions CRUD
+├── Controllers/\n│   ├── ProfilesController.cs    # User profiles\n│   ├── ProfilePicturesController.cs # Image endpoints\n│   ├── RolesController.cs       # Roles CRUD\n│   ├── PermissionsController.cs # Permissions CRUD
 │   ├── HomeController.cs       # MVC dashboard
 │   └── UsersController.cs      # Anonymous REST endpoints
-├── Models/\n│   ├── AccessModels.cs         # Roles and permissions
+├── Models/\n│   ├── ProfileModels.cs         # Profile and picture metadata\n│   ├── AccessModels.cs         # Roles and permissions
 │   └── User.cs                 # User and validated input
-├── Services/\n│   ├── IAccessStore.cs         # Access metadata contract\n│   ├── JsonAccessStore.cs      # Roles/permissions JSON storage
+├── Services/\n│   ├── IProfileStore.cs         # Profile storage contract\n│   ├── JsonProfileStore.cs      # Profile and image storage\n│   ├── IAccessStore.cs         # Access metadata contract\n│   ├── JsonAccessStore.cs      # Roles/permissions JSON storage
 │   ├── IUserStore.cs           # Persistence contract
 │   └── JsonUserStore.cs        # JSON file storage
 ├── Views/Home/
 │   └── Index.cshtml            # Dashboard and CRUD interactions
 ├── wwwroot/css/
 │   └── site.css                # Dark-mode styles
-├── Data/users.json             # Persisted user records\n├── Data/roles.json             # Role definitions\n├── Data/permissions.json       # Permission definitions
+├── Data/users.json             # Persisted user records\n├── Data/profiles.json          # Profile data (created on first write)\n├── Data/profile-pictures.json  # Picture metadata (created on upload)\n├── Data/profile-images/        # Uploaded images (created at runtime)\n├── Data/roles.json             # Role definitions\n├── Data/permissions.json       # Permission definitions
 ├── docs/images/                # Illustrated UI previews
 ├── Properties/launchSettings.json
 ├── Program.cs

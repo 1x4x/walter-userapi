@@ -3,15 +3,15 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Walter UserAPI · Dashboard</title><link rel="stylesheet" href="/css/site.css"></head>
 <body><main class="shell">
-<header><div><div class="eyebrow">● WALTER USERAPI</div><h1>Access Management <span>Dashboard</span></h1><p>ASP.NET Core MVC · Users, roles &amp; permissions · JSON storage</p></div><div class="pill">● Development mode</div></header>
+<header><div><div class="eyebrow">● WALTER USERAPI</div><h1>Access Management <span>Dashboard</span></h1><p>ASP.NET Core MVC · Users, profiles, pictures, roles &amp; permissions · JSON storage</p></div><div class="pill">● Development mode</div></header>
 <section class="stats"><article><small>Users</small><strong id="count-users">—</strong></article><article><small>Roles</small><strong id="count-roles">—</strong></article><article><small>Permissions</small><strong id="count-permissions">—</strong></article></section>
 <nav class="tabs" aria-label="Management sections"><button class="active" data-tab="users">👥 Users</button><button data-tab="roles">🛡️ Roles</button><button data-tab="permissions">🔑 Permissions</button></nav>
 <section class="panel"><div class="panelhead"><h2 id="section-title">Users</h2><button class="primary" id="add">+ Add user</button></div><p id="notice" role="status" class="muted"></p><div class="tablewrap"><table><thead id="columns"></thead><tbody id="items"></tbody></table></div></section>
-<section class="panel"><h2>🔌 REST API</h2><div class="endpoints"><code>/api/users</code><code>/api/roles</code><code>/api/permissions</code></div><p class="muted">GET, GET /{id}, POST, PUT /{id}, DELETE /{id} supported on all three resources.</p><p class="muted">⚠️ Permissions are stored as metadata only. All API routes remain anonymous and are not authorization-enforced. Never expose this development app publicly.</p></section>
+<section class="panel"><h2>🔌 REST API</h2><div class="endpoints"><code>/api/users</code><code>/api/roles</code><code>/api/permissions</code><code>/api/users/{id}/profile</code><code>/api/users/{id}/pictures</code></div><p class="muted">GET, GET /{id}, POST, PUT /{id}, DELETE /{id} supported on users, roles and permissions. Profiles use GET/PUT/DELETE; pictures use GET/POST/DELETE plus avatar selection.</p><p class="muted">⚠️ Permissions are stored as metadata only. All API routes remain anonymous and are not authorization-enforced. Never expose this development app publicly.</p></section>
 <dialog id="editor"><form id="form"><h2 id="formtitle">Add</h2><div id="fields"></div><p id="error" class="error" role="alert"></p><div class="actions"><button type="button" id="cancel">Cancel</button><button type="submit" class="primary">Save</button></div></form></dialog>
-</main><script>
+<dialog id="profile-dialog"><form id="profile-form"><h2 id="profile-title">User profile</h2><p id="profile-user" class="muted"></p><label>Display name<input id="p-display" maxlength="80"></label><label>Bio<textarea id="p-bio" maxlength="1000" rows="3"></textarea></label><label>Location<input id="p-location" maxlength="100"></label><label>Website<input id="p-website" type="url" maxlength="250" placeholder="https://example.com"></label><div class="actions"><button type="button" id="profile-remove" class="danger">Delete profile</button><button type="submit" class="primary">Save profile</button></div><h3>🖼️ Profile pictures</h3><label>Upload PNG, JPEG, GIF or WebP (max 5 MB)<input type="file" id="p-file" accept="image/png,image/jpeg,image/gif,image/webp"></label><button type="button" id="p-upload" class="primary">Upload picture</button><div id="p-pictures" class="picture-grid"></div><p id="p-error" class="error" role="alert"></p><div class="actions"><button type="button" id="p-close">Close</button></div></form></dialog></main><script>
 const $=id=>document.getElementById(id);
-let current='users', editing=null, data={users:[],roles:[],permissions:[]};
+let current='users', editing=null, profileUser=null, data={users:[],roles:[],permissions:[]};
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const singular=s=>s==='permissions'?'permission':s.slice(0,-1);
 async function load(){
@@ -28,7 +28,7 @@ function render(){
  $('columns').innerHTML='<tr>'+titles[current].map(t=>'<th>'+t+'</th>').join('')+'</tr>';
  $('items').innerHTML=data[current].length?data[current].map(x=>{
   const cells=current==='users'?[x.name,x.email,x.role,new Date(x.createdUtc).toLocaleDateString()]:current==='roles'?[x.name,x.description,(x.permissionIds||[]).map(id=>data.permissions.find(p=>p.id===id)?.key||'Unknown').join(', ')||'None']:[x.key,x.description];
-  return '<tr>'+cells.map(c=>'<td>'+safe(c)+'</td>').join('')+'<td><button data-edit="'+x.id+'">Edit</button> <button class="danger" data-delete="'+x.id+'">Delete</button></td></tr>';
+  return '<tr>'+cells.map(c=>'<td>'+safe(c)+'</td>').join('')+'<td>'+(current==='users'?'<button data-profile="'+x.id+'">Profile &amp; pictures</button> ':'')+'<button data-edit="'+x.id+'">Edit</button> <button class="danger" data-delete="'+x.id+'">Delete</button></td></tr>';
  }).join(''):'<tr><td colspan="'+titles[current].length+'" class="empty">No records yet.</td></tr>';
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{
@@ -55,7 +55,8 @@ function openForm(x){
 $('add').onclick=()=>openForm();
 $('cancel').onclick=()=>$('editor').close();
 $('items').onclick=async e=>{
- const edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');
+ const edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]'),profile=e.target.closest('[data-profile]');
+ if(profile)await openProfile(profile.dataset.profile);
  if(edit)openForm(data[current].find(x=>x.id===edit.dataset.edit));
  if(del&&confirm('Delete this '+singular(current)+'?')){
   try{const r=await fetch('/api/'+current+'/'+del.dataset.delete,{method:'DELETE'});if(!r.ok){const b=await r.json().catch(()=>({}));throw Error(b.error||'Delete failed')}await load()}
@@ -71,5 +72,62 @@ $('form').onsubmit=async e=>{
   $('editor').close();await load();
  }catch(error){$('error').textContent=error.message}
 };
+async function api(url,options){
+ const r=await fetch(url,options);
+ if(!r.ok){const body=await r.json().catch(()=>({}));throw Error(body.error||body.title||('HTTP '+r.status))}
+ return r.status===204?null:r.json();
+}
+async function openProfile(userId){
+ profileUser=userId;
+ const user=data.users.find(u=>u.id===userId);
+ $('profile-user').textContent=user?.name||userId;
+ $('p-error').textContent='';
+ try{
+  const r=await fetch('/api/users/'+userId+'/profile');
+  const p=r.ok?await r.json():null;
+  $('p-display').value=p?.displayName||'';
+  $('p-bio').value=p?.bio||'';
+  $('p-location').value=p?.location||'';
+  $('p-website').value=p?.website||'';
+  await refreshPictures();
+  $('profile-dialog').showModal();
+ }catch(e){$('notice').textContent=e.message}
+}
+async function refreshPictures(){
+ const pictures=await api('/api/users/'+profileUser+'/pictures');
+ const r=await fetch('/api/users/'+profileUser+'/profile');
+ const p=r.ok?await r.json():null;
+ $('p-pictures').innerHTML=pictures.length?pictures.map(pic=>{
+  const url='/api/users/'+profileUser+'/pictures/'+pic.id+'/file';
+  return '<div class="picture-card"><img alt="User picture" src="'+url+'"><small>'+Math.round(pic.size/1024)+' KB</small><div>'+(p?.avatarPictureId===pic.id?'<strong>Current avatar</strong>':'<button type="button" data-avatar="'+pic.id+'">Set avatar</button>')+' <button type="button" class="danger" data-remove-picture="'+pic.id+'">Delete</button></div></div>';
+ }).join(''):'<p class="muted">No pictures uploaded yet.</p>';
+}
+$('profile-form').onsubmit=async e=>{
+ e.preventDefault();
+ try{
+  await api('/api/users/'+profileUser+'/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName:$('p-display').value,bio:$('p-bio').value,location:$('p-location').value,website:$('p-website').value||null})});
+  $('p-error').textContent='Profile saved';await refreshPictures();
+ }catch(e){$('p-error').textContent=e.message}
+};
+$('profile-remove').onclick=async()=>{
+ if(!confirm('Delete this user profile? Pictures will remain.'))return;
+ try{await api('/api/users/'+profileUser+'/profile',{method:'DELETE'});$('profile-dialog').close();}
+ catch(e){$('p-error').textContent=e.message}
+};
+$('p-upload').onclick=async()=>{
+ const file=$('p-file').files[0];if(!file)return;
+ const body=new FormData();body.append('file',file);
+ try{await api('/api/users/'+profileUser+'/pictures',{method:'POST',body});$('p-file').value='';await refreshPictures();}
+ catch(e){$('p-error').textContent=e.message}
+};
+$('p-pictures').onclick=async e=>{
+ const avatar=e.target.closest('[data-avatar]'),remove=e.target.closest('[data-remove-picture]');
+ try{
+  if(avatar)await api('/api/users/'+profileUser+'/pictures/'+avatar.dataset.avatar+'/avatar',{method:'PUT'});
+  if(remove&&confirm('Delete this picture permanently?'))await api('/api/users/'+profileUser+'/pictures/'+remove.dataset.removePicture,{method:'DELETE'});
+  await refreshPictures();
+ }catch(error){$('p-error').textContent=error.message}
+};
+$('p-close').onclick=()=>$('profile-dialog').close();
 load();
 </script></body></html>
