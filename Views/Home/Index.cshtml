@@ -1,0 +1,88 @@
+@{ Layout = null; }
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Walter UserAPI · Dashboard</title>
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<main class="shell">
+<header>
+<div><div class="eyebrow">● WALTER USERAPI</div><h1>User Management <span>Dashboard</span></h1><p>ASP.NET Core MVC · JSON persistence · Anonymous REST API</p></div>
+<div class="pill">● Development mode</div>
+</header>
+<section class="stats">
+<article><small>Total users</small><strong id="total">—</strong></article>
+<article><small>API status</small><strong class="good" id="status">Checking</strong></article>
+<article><small>Storage</small><strong>JSON</strong></article>
+</section>
+<section class="panel">
+<div class="panelhead"><h2>Users</h2><button id="add" class="primary">+ Add user</button></div>
+<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead><tbody id="users"><tr><td colspan="5">Loading…</td></tr></tbody></table></div>
+</section>
+<section class="panel">
+<h2>API reference</h2>
+<div class="endpoints"><code>GET /api/users</code><code>GET /api/users/{id}</code><code>POST /api/users</code><code>PUT /api/users/{id}</code><code>DELETE /api/users/{id}</code></div>
+<p class="muted">All routes are anonymous. Do not expose this development API to the public internet.</p>
+</section>
+<dialog id="editor">
+<form id="form">
+<h2 id="formtitle">Add user</h2>
+<label>Name<input id="name" maxlength="80" required></label>
+<label>Email<input id="email" type="email" maxlength="200" required></label>
+<label>Role<input id="role" maxlength="50" value="User"></label>
+<p id="error" class="error" role="alert"></p>
+<div class="actions"><button type="button" id="cancel">Cancel</button><button type="submit" class="primary">Save user</button></div>
+</form>
+</dialog>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let records = [], editing = null;
+function safe(s) { return String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function load() {
+ try {
+  const r=await fetch('/api/users');
+  if(!r.ok) throw Error('HTTP '+r.status);
+  records=await r.json();
+  $('total').textContent=records.length;
+  $('status').textContent='Online';
+  $('users').innerHTML=records.length ? records.map(u=>`<tr><td><b>${safe(u.name)}</b></td><td>${safe(u.email)}</td><td><span class="tag">${safe(u.role)}</span></td><td>${new Date(u.createdUtc).toLocaleDateString()}</td><td><button data-edit="${u.id}">Edit</button> <button class="danger" data-delete="${u.id}">Delete</button></td></tr>`).join('') : '<tr><td colspan="5" class="empty">No users yet. Add your first user.</td></tr>';
+ } catch(e) {
+  $('status').textContent='Offline';
+  $('users').textContent=e.message;
+ }
+}
+function openForm(u) {
+ editing=u?.id??null;
+ $('formtitle').textContent=u?'Edit user':'Add user';
+ $('name').value=u?.name??'';
+ $('email').value=u?.email??'';
+ $('role').value=u?.role??'User';
+ $('error').textContent='';
+ $('editor').showModal();
+}
+$('add').onclick=()=>openForm();
+$('cancel').onclick=()=>$('editor').close();
+$('users').onclick=async e=>{
+ const edit=e.target.closest('[data-edit]'), del=e.target.closest('[data-delete]');
+ if(edit) openForm(records.find(x=>x.id===edit.dataset.edit));
+ if(del && confirm('Permanently delete this user?')) {
+  try { const r=await fetch('/api/users/'+del.dataset.delete,{method:'DELETE'}); if(!r.ok)throw Error('Delete failed'); await load(); }
+  catch(error){alert(error.message);}
+ }
+};
+$('form').onsubmit=async e=>{
+ e.preventDefault();
+ const data={name:$('name').value,email:$('email').value,role:$('role').value};
+ try {
+  const r=await fetch('/api/users'+(editing?'/'+editing:''),{method:editing?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  if(!r.ok){let body=await r.json().catch(()=>({}));$('error').textContent=body.error||body.title||'Save failed';return;}
+  $('editor').close(); await load();
+ } catch(error){$('error').textContent=error.message;}
+};
+load();
+</script>
+</body></html>
