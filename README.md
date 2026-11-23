@@ -6,7 +6,7 @@
 
 ## ✨ Overview
 
-Walter UserAPI provides a browser-based **user management dashboard** and five JSON REST endpoints. It uses a local JSON file rather than a database server. The interface has a dark background, purple-to-pink accents, user counters, editable records, and an add/edit dialog.
+Walter UserAPI provides a browser-based **user management dashboard** and fifteen JSON REST endpoints. It uses a local JSON file rather than a database server. The interface has a dark background, purple-to-pink accents, user counters, editable records, and an add/edit dialog.
 
 ### 🖼️ UI previews
 
@@ -38,7 +38,7 @@ Open **http://localhost:5080** for the UI, or **http://localhost:5080/api/users*
 | | Feature | Details |
 |---|---|---|
 | 👥 | User CRUD | Create, list, view, edit, and delete users |
-| 🌙 | Dark-mode UI | Responsive dashboard with purple/pink highlights |
+| 🛡️ | Roles CRUD | Manage roles and assign permissions |\n| 🔑 | Permissions CRUD | Manage named permissions and descriptions |\n| 🌙 | Dark-mode UI | Responsive dashboard with purple/pink highlights |
 | 🔓 | Anonymous endpoints | No account or token required |
 | 💾 | JSON persistence | Saves to `Data/users.json` |
 | 🧵 | Async storage | Serializes file access within one app process |
@@ -96,23 +96,64 @@ curl -X PUT http://localhost:5080/api/users/YOUR_GUID \
 curl -X DELETE http://localhost:5080/api/users/YOUR_GUID
 ```
 
+
+## 🛡️ Roles & 🔑 Permissions CRUD
+
+The dashboard now has three tabs: **Users**, **Roles**, and **Permissions**, each with create, list, edit, and delete actions.
+
+- **Roles** have a name, description, and a set of permission IDs. Initial roles: `User` and `Admin`.
+- **Permissions** have a unique dotted key (for example, `users.read`, `users.create`, `roles.manage`) and description.
+- Users select an existing role. Creating or updating a user with an unknown role returns `400`.
+- Duplicate role names or permission keys return `409`.
+- A role assigned to a user cannot be deleted or renamed (`409`). Reassign its users first.
+- Deleting a permission removes its ID from roles. The files are updated sequentially, not in a multi-file transaction.
+- Roles persist in `Data/roles.json`; permissions persist in `Data/permissions.json`.
+
+| Method | Roles | Permissions |
+|---|---|---|
+| GET | `/api/roles` | `/api/permissions` |
+| GET by ID | `/api/roles/{id}` | `/api/permissions/{id}` |
+| POST | `/api/roles` | `/api/permissions` |
+| PUT | `/api/roles/{id}` | `/api/permissions/{id}` |
+| DELETE | `/api/roles/{id}` | `/api/permissions/{id}` |
+
+**Create a permission**
+
+```bash
+curl -X POST http://localhost:5080/api/permissions \
+  -H "Content-Type: application/json" \
+  -d '{"key":"users.read","description":"Read user records"}'
+```
+
+**Create a role** (use an existing permission GUID from the response above)
+
+```json
+{
+  "name": "Editor",
+  "description": "Can view user records",
+  "permissionIds": ["REPLACE-WITH-REAL-PERMISSION-GUID"]
+}
+```
+
+**Important:** These permissions are **metadata, not enforced access control**. The API still uses anonymous access. Assigning an `Admin` role does not grant or restrict anything; no role checks or permission-based authorization middleware is implemented. Do not expose this service to untrusted clients.
+
 ## 🗂️ Project structure
 
 ```text
 walter-userapi/
-├── Controllers/
+├── Controllers/\n│   ├── RolesController.cs       # Roles CRUD\n│   ├── PermissionsController.cs # Permissions CRUD
 │   ├── HomeController.cs       # MVC dashboard
 │   └── UsersController.cs      # Anonymous REST endpoints
-├── Models/
+├── Models/\n│   ├── AccessModels.cs         # Roles and permissions
 │   └── User.cs                 # User and validated input
-├── Services/
+├── Services/\n│   ├── IAccessStore.cs         # Access metadata contract\n│   ├── JsonAccessStore.cs      # Roles/permissions JSON storage
 │   ├── IUserStore.cs           # Persistence contract
 │   └── JsonUserStore.cs        # JSON file storage
 ├── Views/Home/
 │   └── Index.cshtml            # Dashboard and CRUD interactions
 ├── wwwroot/css/
 │   └── site.css                # Dark-mode styles
-├── Data/users.json             # Persisted user records
+├── Data/users.json             # Persisted user records\n├── Data/roles.json             # Role definitions\n├── Data/permissions.json       # Permission definitions
 ├── docs/images/                # Illustrated UI previews
 ├── Properties/launchSettings.json
 ├── Program.cs

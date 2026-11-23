@@ -1,88 +1,75 @@
 @{ Layout = null; }
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Walter UserAPI · Dashboard</title>
-<link rel="stylesheet" href="/css/site.css">
-</head>
-<body>
-<main class="shell">
-<header>
-<div><div class="eyebrow">● WALTER USERAPI</div><h1>User Management <span>Dashboard</span></h1><p>ASP.NET Core MVC · JSON persistence · Anonymous REST API</p></div>
-<div class="pill">● Development mode</div>
-</header>
-<section class="stats">
-<article><small>Total users</small><strong id="total">—</strong></article>
-<article><small>API status</small><strong class="good" id="status">Checking</strong></article>
-<article><small>Storage</small><strong>JSON</strong></article>
-</section>
-<section class="panel">
-<div class="panelhead"><h2>Users</h2><button id="add" class="primary">+ Add user</button></div>
-<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead><tbody id="users"><tr><td colspan="5">Loading…</td></tr></tbody></table></div>
-</section>
-<section class="panel">
-<h2>API reference</h2>
-<div class="endpoints"><code>GET /api/users</code><code>GET /api/users/{id}</code><code>POST /api/users</code><code>PUT /api/users/{id}</code><code>DELETE /api/users/{id}</code></div>
-<p class="muted">All routes are anonymous. Do not expose this development API to the public internet.</p>
-</section>
-<dialog id="editor">
-<form id="form">
-<h2 id="formtitle">Add user</h2>
-<label>Name<input id="name" maxlength="80" required></label>
-<label>Email<input id="email" type="email" maxlength="200" required></label>
-<label>Role<input id="role" maxlength="50" value="User"></label>
-<p id="error" class="error" role="alert"></p>
-<div class="actions"><button type="button" id="cancel">Cancel</button><button type="submit" class="primary">Save user</button></div>
-</form>
-</dialog>
-</main>
-<script>
-const $ = id => document.getElementById(id);
-let records = [], editing = null;
-function safe(s) { return String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-async function load() {
- try {
-  const r=await fetch('/api/users');
-  if(!r.ok) throw Error('HTTP '+r.status);
-  records=await r.json();
-  $('total').textContent=records.length;
-  $('status').textContent='Online';
-  $('users').innerHTML=records.length ? records.map(u=>`<tr><td><b>${safe(u.name)}</b></td><td>${safe(u.email)}</td><td><span class="tag">${safe(u.role)}</span></td><td>${new Date(u.createdUtc).toLocaleDateString()}</td><td><button data-edit="${u.id}">Edit</button> <button class="danger" data-delete="${u.id}">Delete</button></td></tr>`).join('') : '<tr><td colspan="5" class="empty">No users yet. Add your first user.</td></tr>';
- } catch(e) {
-  $('status').textContent='Offline';
-  $('users').textContent=e.message;
- }
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Walter UserAPI · Dashboard</title><link rel="stylesheet" href="/css/site.css"></head>
+<body><main class="shell">
+<header><div><div class="eyebrow">● WALTER USERAPI</div><h1>Access Management <span>Dashboard</span></h1><p>ASP.NET Core MVC · Users, roles &amp; permissions · JSON storage</p></div><div class="pill">● Development mode</div></header>
+<section class="stats"><article><small>Users</small><strong id="count-users">—</strong></article><article><small>Roles</small><strong id="count-roles">—</strong></article><article><small>Permissions</small><strong id="count-permissions">—</strong></article></section>
+<nav class="tabs" aria-label="Management sections"><button class="active" data-tab="users">👥 Users</button><button data-tab="roles">🛡️ Roles</button><button data-tab="permissions">🔑 Permissions</button></nav>
+<section class="panel"><div class="panelhead"><h2 id="section-title">Users</h2><button class="primary" id="add">+ Add user</button></div><p id="notice" role="status" class="muted"></p><div class="tablewrap"><table><thead id="columns"></thead><tbody id="items"></tbody></table></div></section>
+<section class="panel"><h2>🔌 REST API</h2><div class="endpoints"><code>/api/users</code><code>/api/roles</code><code>/api/permissions</code></div><p class="muted">GET, GET /{id}, POST, PUT /{id}, DELETE /{id} supported on all three resources.</p><p class="muted">⚠️ Permissions are stored as metadata only. All API routes remain anonymous and are not authorization-enforced. Never expose this development app publicly.</p></section>
+<dialog id="editor"><form id="form"><h2 id="formtitle">Add</h2><div id="fields"></div><p id="error" class="error" role="alert"></p><div class="actions"><button type="button" id="cancel">Cancel</button><button type="submit" class="primary">Save</button></div></form></dialog>
+</main><script>
+const $=id=>document.getElementById(id);
+let current='users', editing=null, data={users:[],roles:[],permissions:[]};
+const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const singular=s=>s==='permissions'?'permission':s.slice(0,-1);
+async function load(){
+ try{
+  const results=await Promise.all(['users','roles','permissions'].map(async k=>{const r=await fetch('/api/'+k);if(!r.ok)throw Error(k+': '+r.status);return r.json()}));
+  ['users','roles','permissions'].forEach((k,i)=>{data[k]=results[i];$('count-'+k).textContent=results[i].length});
+  $('notice').textContent='';render();
+ }catch(e){$('notice').textContent='Failed to load: '+e.message}
 }
-function openForm(u) {
- editing=u?.id??null;
- $('formtitle').textContent=u?'Edit user':'Add user';
- $('name').value=u?.name??'';
- $('email').value=u?.email??'';
- $('role').value=u?.role??'User';
- $('error').textContent='';
- $('editor').showModal();
+function render(){
+ const titles={users:['Name','Email','Role','Created','Actions'],roles:['Name','Description','Permissions','Actions'],permissions:['Key','Description','Actions']};
+ $('section-title').textContent=current[0].toUpperCase()+current.slice(1);
+ $('add').textContent='+ Add '+singular(current);
+ $('columns').innerHTML='<tr>'+titles[current].map(t=>'<th>'+t+'</th>').join('')+'</tr>';
+ $('items').innerHTML=data[current].length?data[current].map(x=>{
+  const cells=current==='users'?[x.name,x.email,x.role,new Date(x.createdUtc).toLocaleDateString()]:current==='roles'?[x.name,x.description,(x.permissionIds||[]).map(id=>data.permissions.find(p=>p.id===id)?.key||'Unknown').join(', ')||'None']:[x.key,x.description];
+  return '<tr>'+cells.map(c=>'<td>'+safe(c)+'</td>').join('')+'<td><button data-edit="'+x.id+'">Edit</button> <button class="danger" data-delete="'+x.id+'">Delete</button></td></tr>';
+ }).join(''):'<tr><td colspan="'+titles[current].length+'" class="empty">No records yet.</td></tr>';
+}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{
+ current=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(t=>t.classList.toggle('active',t===b));render();
+});
+function field(label,id,value='',type='text',extra=''){
+ return '<label>'+label+'<input id="'+id+'" type="'+type+'" value="'+safe(value).replace(/&#39;/g,'&#39;')+'" '+extra+'></label>';
+}
+function openForm(x){
+ editing=x?.id??null;
+ $('formtitle').textContent=(x?'Edit ':'Add ')+singular(current);
+ let html='';
+ if(current==='users'){
+  html=field('Name','f-name',x?.name||'','text','required maxlength="80"')+field('Email','f-email',x?.email||'','email','required maxlength="200"');
+  html+='<label>Role<select id="f-role">'+data.roles.map(r=>'<option value="'+safe(r.name)+'" '+(r.name===(x?.role||'User')?'selected':'')+'>'+safe(r.name)+'</option>').join('')+'</select></label>';
+ }else if(current==='roles'){
+  html=field('Role name','f-name',x?.name||'','text','required maxlength="50"')+field('Description','f-description',x?.description||'','text','maxlength="300"');
+  html+='<fieldset><legend>Permissions</legend>'+data.permissions.map(p=>'<label class="check"><input type="checkbox" name="permission" value="'+p.id+'" '+((x?.permissionIds||[]).includes(p.id)?'checked':'')+'>'+safe(p.key)+'</label>').join('')+'</fieldset>';
+ }else{
+  html=field('Permission key (e.g. users.read)','f-key',x?.key||'','text','required maxlength="100" pattern="[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+"')+field('Description','f-description',x?.description||'','text','maxlength="300"');
+ }
+ $('fields').innerHTML=html;$('error').textContent='';$('editor').showModal();
 }
 $('add').onclick=()=>openForm();
 $('cancel').onclick=()=>$('editor').close();
-$('users').onclick=async e=>{
- const edit=e.target.closest('[data-edit]'), del=e.target.closest('[data-delete]');
- if(edit) openForm(records.find(x=>x.id===edit.dataset.edit));
- if(del && confirm('Permanently delete this user?')) {
-  try { const r=await fetch('/api/users/'+del.dataset.delete,{method:'DELETE'}); if(!r.ok)throw Error('Delete failed'); await load(); }
-  catch(error){alert(error.message);}
+$('items').onclick=async e=>{
+ const edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');
+ if(edit)openForm(data[current].find(x=>x.id===edit.dataset.edit));
+ if(del&&confirm('Delete this '+singular(current)+'?')){
+  try{const r=await fetch('/api/'+current+'/'+del.dataset.delete,{method:'DELETE'});if(!r.ok){const b=await r.json().catch(()=>({}));throw Error(b.error||'Delete failed')}await load()}
+  catch(error){$('notice').textContent=error.message}
  }
 };
 $('form').onsubmit=async e=>{
  e.preventDefault();
- const data={name:$('name').value,email:$('email').value,role:$('role').value};
- try {
-  const r=await fetch('/api/users'+(editing?'/'+editing:''),{method:editing?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  if(!r.ok){let body=await r.json().catch(()=>({}));$('error').textContent=body.error||body.title||'Save failed';return;}
-  $('editor').close(); await load();
- } catch(error){$('error').textContent=error.message;}
+ const payload=current==='users'?{name:$('f-name').value,email:$('f-email').value,role:$('f-role').value}:current==='roles'?{name:$('f-name').value,description:$('f-description').value,permissionIds:[...document.querySelectorAll('[name=permission]:checked')].map(x=>x.value)}:{key:$('f-key').value,description:$('f-description').value};
+ try{
+  const r=await fetch('/api/'+current+(editing?'/'+editing:''),{method:editing?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(!r.ok){const b=await r.json().catch(()=>({}));throw Error(b.error||b.title||'Save failed')}
+  $('editor').close();await load();
+ }catch(error){$('error').textContent=error.message}
 };
 load();
-</script>
-</body></html>
+</script></body></html>

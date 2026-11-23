@@ -8,7 +8,7 @@ namespace AnonymousUserMvcApi.Controllers;
 [ApiController]
 [AllowAnonymous]
 [Route("api/users")]
-public sealed class UsersController(IUserStore store) : ControllerBase
+public sealed class UsersController(IUserStore store, IAccessStore access) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<User>>> GetAll()
@@ -24,6 +24,8 @@ public sealed class UsersController(IUserStore store) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<User>> Create([FromBody] UserInput input)
     {
+        if (!await access.RoleExistsAsync(input.Role ?? ""))
+            return BadRequest(new { error = "Role does not exist" });
         var user = await store.CreateAsync(input);
         return user is null
             ? Conflict(new { error = "Email already exists" })
@@ -33,6 +35,8 @@ public sealed class UsersController(IUserStore store) : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UserInput input)
     {
+        if (!await access.RoleExistsAsync(input.Role ?? ""))
+            return BadRequest(new { error = "Role does not exist" });
         var result = await store.UpdateAsync(id, input);
         if (!result.Found) return NotFound();
         if (result.Duplicate) return Conflict(new { error = "Email already exists" });

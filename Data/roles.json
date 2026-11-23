@@ -1,0 +1,4 @@
+[
+  {"id":"ed8f8d3e-bd39-43d0-b26c-837d2bcb22a1","name":"User","description":"Default user role","permissionIds":[]},
+  {"id":"79bfc5c0-a322-4784-88d5-51d76c147a65","name":"Admin","description":"Administrative role (metadata only)","permissionIds":[]}
+]
